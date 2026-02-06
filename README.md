@@ -49,6 +49,12 @@ cd api-credito-consignado
 pip install -r requirements.txt
 ```
 
+3. Configure as variáveis de ambiente:
+```bash
+cp .env.example .env
+# Edite o arquivo .env e adicione a URL do modelo no Google Drive
+```
+
 ## 🔧 Dependências
 
 - pandas
@@ -58,13 +64,36 @@ pip install -r requirements.txt
 - uvicorn
 - joblib
 - pydantic
+- gdown (para baixar o modelo)
+- python-dotenv (para variáveis de ambiente)
+
+## 📦 Configuração do Modelo
+
+O modelo é grande demais para o GitHub (107 MB), então ele é baixado automaticamente do Google Drive.
+
+### Como fazer upload do modelo no Google Drive:
+
+1. Acesse https://drive.google.com
+2. Faça upload do arquivo `modelo_reincidencia_credito.pkl`
+3. Clique com botão direito no arquivo → "Compartilhar"
+4. Em "Acesso geral", selecione "Qualquer pessoa com o link"
+5. Copie o link compartilhado (formato: `https://drive.google.com/file/d/FILE_ID/view?usp=sharing`)
+6. Use esse link na variável de ambiente `MODELO_URL`
+
+### Configurar no Render:
+
+1. Acesse seu projeto no Render
+2. Vá em "Environment" → "Environment Variables"
+3. Adicione a variável:
+   - **Key**: `MODELO_URL`
+   - **Value**: Link do Google Drive (formato completo)
 
 ## 📊 Uso
 
-### Executar a API
+### Executar a API localmente
 
 ```bash
-uvicorn src.api:app --reload
+PYTHONPATH=consignado-analytics uvicorn consignado-analytics.src.api:app --reload
 ```
 
 A API estará disponível em `http://localhost:8000`
@@ -72,6 +101,16 @@ A API estará disponível em `http://localhost:8000`
 ### Documentação da API
 
 Acesse `http://localhost:8000/docs` para ver a documentação interativa (Swagger UI).
+
+### Deploy no Render
+
+**Comando de Start:**
+```bash
+PYTHONPATH=consignado-analytics uvicorn consignado-analytics.src.api:app --host 0.0.0.0 --port $PORT
+```
+
+**Variáveis de Ambiente necessárias:**
+- `MODELO_URL`: URL do modelo no Google Drive
 
 ## 📝 Licença
 

@@ -4,12 +4,40 @@ from pydantic import BaseModel
 import joblib
 import pandas as pd
 import uvicorn
+import gdown
+import os
+from pathlib import Path
 from src.preprocessing import limpar_dados_para_modelo # Importando do seu módulo
 
 app = FastAPI()
 
-# Carregar modelo (caminho relativo à pasta raiz quando rodar)
-modelo = joblib.load('models/modelo_reincidencia_credito.pkl')
+# Função para baixar o modelo do Google Drive
+def baixar_modelo():
+    modelo_path = Path('consignado-analytics/models/modelo_reincidencia_credito.pkl')
+    
+    # Se o modelo já existe, não precisa baixar
+    if modelo_path.exists():
+        print("✓ Modelo encontrado localmente")
+        return str(modelo_path)
+    
+    # Criar diretório se não existir
+    modelo_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # URL do Google Drive (usar variável de ambiente)
+    gdrive_url = os.getenv('MODELO_URL')
+    
+    if not gdrive_url:
+        raise ValueError("MODELO_URL não configurada! Configure a variável de ambiente no Render.")
+    
+    print("⏬ Baixando modelo do Google Drive...")
+    gdown.download(gdrive_url, str(modelo_path), quiet=False, fuzzy=True)
+    print("✓ Modelo baixado com sucesso!")
+    
+    return str(modelo_path)
+
+# Carregar modelo (baixa do Google Drive se necessário)
+modelo_path = baixar_modelo()
+modelo = joblib.load(modelo_path)
 
 class DadosInput(BaseModel):
     salario: float
