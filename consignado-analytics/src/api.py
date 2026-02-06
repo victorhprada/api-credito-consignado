@@ -1,5 +1,6 @@
 # src/api.py
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import joblib
 import pandas as pd
@@ -10,6 +11,17 @@ from pathlib import Path
 from src.preprocessing import limpar_dados_para_modelo # Importando do seu módulo
 
 app = FastAPI()
+
+# Configurar CORS para permitir requisições do frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permite todas as origens (ideal para APIs públicas)
+    # Para produção mais restrita, use:
+    # allow_origins=["https://retentionml.lovable.app"],
+    allow_credentials=True,
+    allow_methods=["*"],  # Permite todos os métodos (GET, POST, etc.)
+    allow_headers=["*"],  # Permite todos os headers
+)
 
 # Função para baixar o modelo do Google Drive
 def baixar_modelo():
