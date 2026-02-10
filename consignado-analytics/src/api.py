@@ -106,6 +106,38 @@ def clean_currency(x):
     except:
         return 0
 
+def clean_dependents(x):
+    """
+    Converte 'Cônjuge; Pai/Mãe' -> 2
+    Converte 'Filho(a)' -> 1
+    Converte 3 -> 3
+    """
+    if pd.isna(x) or x == '':
+        return 0
+    
+    # Se já for número, retorna int
+    if isinstance(x, (int, float)):
+        return int(x)
+        
+    s = str(x).strip()
+    
+    # Se for "0", "1", "10"...
+    if s.isdigit():
+        return int(s)
+        
+    # Lógica de Contagem de Lista (separada por ; ou ,)
+    # Ex: "Pai; Mãe" tem 1 ponto e vírgula, logo são 2 pessoas
+    delimiters = [';', ',']
+    for char in delimiters:
+        if char in s:
+            return s.count(char) + 1
+            
+    # Se for texto sem separador (ex: "Filho"), assumimos 1
+    if len(s) > 0:
+        return 1
+        
+    return 0
+
 def calculate_age(dob):
     """Calcula idade baseada em data ISO ou BR"""
     if pd.isna(dob):
@@ -195,6 +227,11 @@ async def predict_batch(file: UploadFile = File(...)):
             df_processed['salario'] = df_processed['salario'].apply(clean_currency)
         else:
             df_processed['salario'] = 0
+
+        if 'dependentes' in df_processed.columns:
+            df_processed['dependentes'] = df_processed['dependentes'].apply(clean_dependents)
+        else:
+            df_processed['dependentes'] = 0
 
         # Garante que as outras colunas existam (com valores padrao)
         defaults = {
