@@ -286,9 +286,43 @@ async def predict_batch(file: UploadFile = File(...)):
             'estado': 'SP', 'genero': 'M', 
             'escolaridade': 'Indefinido', 'est_civil': 'Solteiro(a)'
         }
+
         for col, val in defaults.items():
             if col not in df_processed.columns:
                 df_processed[col] = val
+
+        # 1. Estado Civil
+        mapa_civil = {
+            'Casado(a)': 0, 
+            'Divorciado(a)': 1, 
+            'Outros': 2,
+            'Separado(a)': 3, 
+            'Solteiro(a)': 4, 
+            'Viúvo(a)': 5,
+            'União Estável': 6
+        }
+        # O .map converte. O fillna(4) garante que se vier algo estranho, vira 'Solteiro' (4)
+        df_processed['est_civil_cod'] = df_processed['est_civil'].map(mapa_civil).fillna(4).astype(int)
+
+        # 2. Gênero
+        mapa_genero = {'F': 0, 'M': 1} 
+        df_processed['genero_cod'] = df_processed['genero'].map(mapa_genero).fillna(1).astype(int)
+
+        # 3. Escolaridade (Ordem Alfabética aproximada do LabelEncoder)
+        mapa_escolaridade = {
+            '1o Grau Completo': 0, '1o Grau Incompleto': 1,
+            '2o Grau Completo': 2, '2o Grau Incompleto': 3,
+            '4a Série Completa': 4, 'Alfabetizado': 5,
+            'Analfabeto': 6, 'Superior Completo': 7,
+            'Superior Incompleto': 8
+        }
+        df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(2).astype(int)
+
+        # 4. Estado (UF)
+        # Lista alfabética das UFs para gerar o mapa automaticamente
+        ufs = sorted(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])
+        mapa_uf = {uf: i for i, uf in enumerate(ufs)}
+        df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(24).astype(int) # 24 é SP (aprox)
 
         print(f"Colunas processadas: {df_processed.columns.tolist()}")
 
