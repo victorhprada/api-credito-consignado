@@ -213,22 +213,24 @@ async def predict_batch(file: UploadFile = File(...)):
         features = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado', 'genero', 'escolaridade', 'est_civil']
         X = df_processed[features]
 
-        # rename_map = {
-        #     'salario': 'Salario',           # ATENÇÃO: Se no treino era "Salario Base", mude aqui!
-        #     'idade': 'Idade',
-        #     'dependentes': 'Dependentes',
-        #     'anos_empresa': 'Anos_de_Empresa', # O log mostrou que este tem underscores
-        #     'estado': 'Estado',
-        #     'genero': 'Genero',
-        #     'escolaridade': 'Escolaridade',
-        #     'est_civil': 'Estado Civil'
-        # }
 
-        # X_final = X.rename(columns=rename_map)
         cols_model_order = ['salario', 'idade', 'estado', 'anos_empresa', 'dependentes','escolaridade', 'genero',  'est_civil']
-        X = X[cols_model_order]
+        X_tmp = X[cols_model_order]
 
-        print(f"Colunas enviadas para o modelo: {X.columns.tolist()}")
+        print(f"Colunas enviadas para o modelo: {X_tmp.columns.tolist()}")
+
+        rename_map = {
+            'salario': 'Salario Base',           
+            'idade': 'Idade',
+            'dependentes': 'Total De Dependentes',
+            'anos_empresa': 'Anos_de_Empresa',
+            'estado': 'Estado',
+            'genero': 'Genero',
+            'escolaridade': 'Nivel De Escolaridade',
+            'est_civil': 'Estado Civil'
+        }
+
+        X = X_tmp.rename(columns=rename_map)
 
         print("Indo para predição")
 
