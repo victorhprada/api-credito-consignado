@@ -203,22 +203,24 @@ def calculate_years_worked(val):
 
 @app.post("/predict_batch")
 async def predict_batch(file: UploadFile = File(...)):
-    # 1. Ler o arquivo CSV enviado
+    # 1. Validação Básica
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Arquivo deve ser um CSV")
     
     try:
+        # Leitura do arquivo
         content = await file.read()
         df = pd.read_csv(io.BytesIO(content))
         
-        # 2. Mapeamento Inteligente de Colunas com trava anti-duplicidade
+        # --- ETAPA 1: MAPEAMENTO DE COLUNAS (NORMALIZAÇÃO) ---
         column_map = {}
-        targets_found = set ()
-
+        targets_found = set()
 
         for col in df.columns:
             col_lower = col.lower()
             target = None
+
+            # Lógica de Identificação
             if 'nascimento' in col_lower or 'birth' in col_lower:
                 target = 'idade_raw'
             elif ('salario' in col_lower or 'base' in col_lower or 'income' in col_lower) and 'liquido' not in col_lower:
@@ -229,7 +231,6 @@ async def predict_batch(file: UploadFile = File(...)):
                 target = 'anos_empresa'
             elif 'estado civil' in col_lower or 'civil' in col_lower:
                 target = 'est_civil'
-            # Só aceita "estado" se NÃO tiver "civil" no nome
             elif ('estado' in col_lower or 'uf' in col_lower) and 'civil' not in col_lower:
                 target = 'estado'
             elif 'genero' in col_lower or 'sexo' in col_lower:
@@ -241,135 +242,114 @@ async def predict_batch(file: UploadFile = File(...)):
                 column_map[col] = target
                 targets_found.add(target)
 
-        # Renomeia as colunas encontradas
+        # Aplica renomeação e remove duplicatas
         df_processed = df.rename(columns=column_map).copy()
-
-        # Limpeza Extra: Garante que só temos UMA coluna de cada, sem duplicatas
+        
+        # Garante apenas uma coluna de cada tipo (se houver duplicidade no CSV)
         df_final = pd.DataFrame()
-        # Copia apenas as colunas que mapeamos
         for target in targets_found:
             if target in df_processed.columns:
-                # Se ainda assim houver duplicata, pega só a primeira
                 if isinstance(df_processed[target], pd.DataFrame):
                     df_final[target] = df_processed[target].iloc[:, 0]
                 else:
                     df_final[target] = df_processed[target]
-        
         df_processed = df_final
 
-        # 3. Tratamento de Dados (Cleaning)
-        # Calcula Idade se necessário
-        if 'idade_raw' in df_processed.columns:
-            df_processed['idade'] = df_processed['idade_raw'].apply(calculate_age)
-        elif 'idade' not in df_processed.columns:
-            df_processed['idade'] = 0 # Fallback
-
-        # Limpa Salário
-        if 'salario' in df_processed.columns:
-            df_processed['salario'] = df_processed['salario'].apply(clean_currency)
-        else:
-            df_processed['salario'] = 0
-
-        if 'dependentes' in df_processed.columns:
-            df_processed['dependentes'] = df_processed['dependentes'].apply(clean_dependents)
-        else:
-            df_processed['dependentes'] = 0
-
-        if 'anos_empresa' in df_processed.columns:
-            df_processed['anos_empresa'] = df_processed['anos_empresa'].apply(calculate_years_worked)
-        else:
-            df_processed['anos_empresa'] = 0
-
-        # Garante que as outras colunas existam (com valores padrao)
+        # --- ETAPA 2: LIMPEZA E CÁLCULOS (CLEANING) ---
+        
+        # Preenche colunas obrigatórias com padrão se não existirem
         defaults = {
             'dependentes': 0, 'anos_empresa': 0, 
             'estado': 'SP', 'genero': 'M', 
-            'escolaridade': 'Indefinido', 'est_civil': 'Solteiro(a)'
+            'escolaridade': '2o Grau Completo', 'est_civil': 'Solteiro(a)',
+            'salario': 0, 'idade_raw': None
         }
-
         for col, val in defaults.items():
             if col not in df_processed.columns:
                 df_processed[col] = val
 
-        # 1. Estado Civil (Copiado da lógica do preprocessing.py)
-        # map_est_civil = {'Casado(a)': 1, 'Solteiro(a)': 0, 'Divorciado(a)': 2, 'Viúvo(a)': 3}
+        # A. Cálculos Numéricos
+        # Idade
+        if 'idade_raw' in df_processed.columns:
+            df_processed['idade'] = df_processed['idade_raw'].apply(calculate_age)
+        elif 'idade' not in df_processed.columns:
+            df_processed['idade'] = 0 
+
+        # Salário
+        df_processed['salario'] = df_processed['salario'].apply(clean_currency)
+        
+        # Dependentes
+        df_processed['dependentes'] = df_processed['dependentes'].apply(clean_dependents)
+            
+        # Anos de Empresa
+        df_processed['anos_empresa'] = df_processed['anos_empresa'].apply(calculate_years_worked)
+
+        # --- ETAPA 3: ENCODING (TEXTO -> NÚMERO) ---
+        # ATENÇÃO: Convertemos aqui para os números exatos que o modelo espera (0, 1, 2...)
+        
+        # Estado Civil
         mapa_civil = {
-            'Casado(a)': 1, 
-            'Solteiro(a)': 0, 
-            'Divorciado(a)': 2, 
-            'Viúvo(a)': 3,
-            # Fallbacks para variações que podem vir no CSV mas não estão no mapa original
-            'Separado(a)': 2,      # Trata como Divorciado
-            'União Estável': 1,    # Trata como Casado
-            'Outros': 0            # Trata como Solteiro
+            'Casado(a)': 1, 'União Estável': 1,
+            'Solteiro(a)': 0, 'Outros': 0,
+            'Divorciado(a)': 2, 'Separado(a)': 2,
+            'Viúvo(a)': 3
         }
-        # O fillna(0) garante que qualquer coisa estranha vire 'Solteiro' (Seguro)
         df_processed['est_civil_cod'] = df_processed['est_civil'].map(mapa_civil).fillna(0).astype(int)
 
-        # 2. Gênero (map_sexo = {'M': 1, 'F': 0})
+        # Gênero
         mapa_sexo = {'M': 1, 'F': 0} 
-        # Normalizamos para maiúsculo antes de mapear
         df_processed['genero_cod'] = df_processed['genero'].str.upper().map(mapa_sexo).fillna(0).astype(int)
 
-        # 3. Escolaridade (map_escolaridade = {'Superior Completo': 3, ...})
+        # Escolaridade
         mapa_escolaridade = {
             'Superior Completo': 3,
-            '2º Grau Completo': 2, 
-            '2o Grau Completo': 2,    # Variação comum (o vs º)
-            'Ensino Médio Completo': 2, # Sinônimo
-            '2º Grau Incompleto': 1, 
-            '2o Grau Incompleto': 1,
-            'Fundamental': 0,
-            '1o Grau Completo': 0,
-            'Alfabetizado': 0
+            '2º Grau Completo': 2, '2o Grau Completo': 2, 'Ensino Médio Completo': 2,
+            '2º Grau Incompleto': 1, '2o Grau Incompleto': 1,
+            'Fundamental': 0, '1o Grau Completo': 0, 'Alfabetizado': 0
         }
         df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(0).astype(int)
 
-        # 4. Estado (UF)
-        # Lista alfabética das UFs para gerar o mapa automaticamente
+        # Estado (UF) -> Mantendo mapeamento numérico (0-26)
         ufs = sorted(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])
         mapa_uf = {uf: i for i, uf in enumerate(ufs)}
-        df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(24).astype(int) # 24 é SP (aprox)
+        df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(0).astype(int)
 
-        print(f"Colunas processadas: {df_processed.columns.tolist()}")
+        print(f"Colunas disponíveis no DF Processado: {df_processed.columns.tolist()}")
 
-        # 4. Prepara para o Modelo (A ordem das colunas importa!)
-        # Nomes internos que usamos
-        features_internas = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado_cod', 'genero_cod', 'escolaridade_cod', 'est_civil_cod']
-        X = df_processed[features_internas]
-
-
-        cols_model_order = ['salario', 'idade', 'estado', 'anos_empresa', 'dependentes','escolaridade', 'genero',  'est_civil']
-        X_tmp = X[cols_model_order]
-
-        print(f"1. Colunas enviadas para o modelo: {X_tmp.columns.tolist()}")
-
-        features_internas = [
-            'salario', 
-            'idade', 
-            'dependentes', 
-            'anos_empresa', 
-            'est_civil_cod',    # Usar a versão codificada
-            'genero_cod',       # Usar a versão codificada
-            'escolaridade_cod', # Usar a versão codificada
-            'estado_cod'        # Usar a versão codificada
+        # --- ETAPA 4: PREPARAÇÃO FINAL PARA O MODELO ---
+        
+        # 1. Selecionar APENAS as colunas numéricas (CODIFICADAS)
+        # IMPORTANTE: Aqui usamos os nomes '_cod' que acabamos de criar
+        features_para_modelo = [
+            'salario',          # Numérico
+            'idade',            # Numérico
+            'dependentes',      # Numérico
+            'anos_empresa',     # Numérico
+            'est_civil_cod',    # Codificado (0, 1, 2...)
+            'genero_cod',       # Codificado (0, 1)
+            'escolaridade_cod', # Codificado (0, 1, 2, 3)
+            'estado_cod'        # Codificado (0-26)
         ]
+        
+        # Cria o DataFrame X limpo
+        X = df_processed[features_para_modelo].copy()
 
-        X_tmp = df_processed[features_internas].copy()
-
+        # 2. Renomear para os nomes EXATOS que o .pkl exige
+        # De: "Nosso Nome Interno" -> Para: "Nome do Treino"
         rename_map = {
             'salario': 'Salario Base',
             'idade': 'Idade',
             'dependentes': 'Total De Dependentes',
             'anos_empresa': 'Anos_de_Empresa',
-            'est_civil_cod': 'Estado Civil',        # O modelo lerá os números daqui
-            'genero_cod': 'Genero',                 # O modelo lerá os números daqui
-            'escolaridade_cod': 'Nivel De Escolaridade', # O modelo lerá os números daqui
-            'estado_cod': 'Estado'
+            'est_civil_cod': 'Estado Civil',        # Note: Liga o CODIFICADO ao nome final
+            'genero_cod': 'Genero',                 # Note: Liga o CODIFICADO ao nome final
+            'escolaridade_cod': 'Nivel De Escolaridade', # Note: Liga o CODIFICADO ao nome final
+            'estado_cod': 'Estado'                  # Note: Liga o CODIFICADO ao nome final
         }
+        
+        X_final = X.rename(columns=rename_map)
 
-        X_tmp = X_tmp.rename(columns=rename_map)
-
+        # 3. Ordenar colunas (Ordem obrigatória do Scikit-Learn)
         colunas_ordenadas = [
             'Salario Base', 
             'Idade', 
@@ -380,40 +360,40 @@ async def predict_batch(file: UploadFile = File(...)):
             'Nivel De Escolaridade', 
             'Estado'
         ]
+        
+        # Reorganiza
+        X_final = X_final[colunas_ordenadas]
 
-        # Reorganiza as colunas
-        try:
-            X = X_tmp[colunas_ordenadas]
-        except KeyError as e:
-            # Debug caso ainda falte algo
-            print(f"Colunas disponíveis no X: {X_tmp.columns.tolist()}")
-            print(f"Colunas exigidas: {colunas_ordenadas}")
-            raise e
+        print(f"Colunas finais enviadas para predição: {X_final.columns.tolist()}")
+        print(f"Exemplo de dados: {X_final.head(1).values}")
 
-        print(f"2. Colunas enviadas para o modelo: {X.columns.tolist()}")
-
-        print("Indo para predição")
-
-        # 5. Predição em Lote (Vetorizada)
-        predictions = modelo.predict_proba(X)[:, 1]
+        # --- ETAPA 5: PREDIÇÃO ---
+        print("Indo para predição...")
+        predictions = modelo.predict_proba(X_final)[:, 1]
         print("Predição concluída com sucesso!")
 
-        # 6. Adiciona resultados ao DataFrame original
+        # --- ETAPA 6: RETORNO ---
+        # Monta o CSV de resposta usando o DF original processado (para o usuário ler os textos, não os códigos)
         df_retorno = df_processed.copy()
+        
+        # Limpa as colunas auxiliares para não poluir o CSV do usuário
+        cols_sujeira = ['est_civil_cod', 'genero_cod', 'escolaridade_cod', 'estado_cod', 'idade_raw']
+        df_retorno = df_retorno.drop(columns=[c for c in cols_sujeira if c in df_retorno.columns], errors='ignore')
+
         df_retorno['Probabilidade_Retencao'] = (predictions * 100).round(2)
         df_retorno['Classificacao'] = np.where(predictions > 0.5, 'Perfil Tomador', 'Propensão à Quitação')
 
-        # 7. Retorna o CSV modificado
         stream = io.StringIO()
         df_retorno.to_csv(stream, index=False)
+        
         response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
         response.headers["Content-Disposition"] = "attachment; filename=analise_processada.csv"
         return response
 
     except Exception as e:
         erro_completo = traceback.format_exc()
-        print(f"Erro completo: {erro_completo}")
-        raise HTTPException(status_code=500, detail=f"Erro ao processar CSV: {str(e)}")
+        print(f"ERRO FATAL: {erro_completo}")
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
