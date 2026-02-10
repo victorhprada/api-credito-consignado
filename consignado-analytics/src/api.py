@@ -225,7 +225,7 @@ async def predict_batch(file: UploadFile = File(...)):
         }
 
         X_final = X.rename(columns=rename_map)
-        cols_model_order = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado', 'genero', 'escolaridade', 'est_civil']
+        cols_model_order = ['salario', 'idade', 'estado', 'anos_empresa', 'dependentes','escolaridade', 'genero',  'est_civil']
         X_final = X_final[cols_model_order]
 
         print(f"Colunas enviadas para o modelo: {X_final.columns.tolist()}")
