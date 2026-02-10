@@ -14,6 +14,7 @@ from io import StringIO
 from fastapi.responses import StreamingResponse
 import numpy as np
 import io
+import traceback
 
 app = FastAPI()
 
@@ -111,8 +112,16 @@ def calculate_age(dob):
         return 0
     try:
         # Tenta converter para datetime (aceita ISO e BR automaticamente)
-        birth_date = pd.to_datetime(dob, dayfirst=True) # dayfirst ajuda com formatos BR
+        birth_date = pd.to_datetime(dob, errors='coerce') # dayfirst ajuda com formatos BR
+
+        if pd.isna(birth_date):
+            return 0
+
         today = datetime.now()
+
+        if birth_date.tzinfo:
+            birth_date = birth_date.tz_localize(None)
+
         age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
         return max(0, age) # Evita idade negativa
     except:
@@ -176,10 +185,16 @@ async def predict_batch(file: UploadFile = File(...)):
             if col not in df_processed.columns:
                 df_processed[col] = val
 
+        print(f"Colunas processadas: {df_processed.columns.tolist()}")
+
         # 4. Prepara para o Modelo (A ordem das colunas importa!)
         # IMPORTANTE: Use a mesma ordem que usou no treino do modelo
         features = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado', 'genero', 'escolaridade', 'est_civil']
         X = df_processed[features]
+
+        print("Indo para predição")
+        predictions = modelo.predict_proba(X)[:, 1]
+        print("Predição concluída com sucesso!")
 
         # 5. Predição em Lote (Vetorizada)
         predictions = modelo.predict_proba(X)[:, 1] # Pega a probabilidade da classe 1 (Positiva)
@@ -196,6 +211,8 @@ async def predict_batch(file: UploadFile = File(...)):
         return response
 
     except Exception as e:
+        erro_completo = traceback.format_exc()
+        print(f"Erro completo: {erro_completo}")
         raise HTTPException(status_code=500, detail=f"Erro ao processar CSV: {str(e)}")
 
 if __name__ == "__main__":
