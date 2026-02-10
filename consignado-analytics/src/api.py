@@ -159,6 +159,48 @@ def calculate_age(dob):
     except:
         return 0
 
+def calculate_years_worked(val):
+    """
+    Calcula anos de casa baseado na data de admissão.
+    Entrada: '2020-01-01' -> Saída: 4.1
+    Entrada: 5 -> Saída: 5.0
+    """
+    if pd.isna(val) or val == '':
+        return 0
+    
+    # Se já vier como número (ex: planilha calculada), retorna o número
+    if isinstance(val, (int, float)):
+        return float(val)
+        
+    # Se for string numérica (ex: "5.5")
+    s = str(val).strip()
+    try:
+        if s.replace('.', '', 1).isdigit():
+            return float(s)
+    except:
+        pass
+
+    try:
+        # Tenta converter string de data para objeto datetime
+        admission_date = pd.to_datetime(val, errors='coerce')
+        
+        if pd.isna(admission_date):
+            return 0
+            
+        # Remove fuso horário se tiver, para evitar erro de comparação
+        if admission_date.tzinfo:
+            admission_date = admission_date.tz_localize(None)
+            
+        today = datetime.now()
+        
+        # Cálculo de dias / 365.25
+        delta = today - admission_date
+        years = delta.days / 365.25
+        
+        return max(0.0, round(years, 2)) # Retorna arredondado, sem negativo
+    except:
+        return 0
+
 @app.post("/predict_batch")
 async def predict_batch(file: UploadFile = File(...)):
     # 1. Ler o arquivo CSV enviado
@@ -232,6 +274,11 @@ async def predict_batch(file: UploadFile = File(...)):
             df_processed['dependentes'] = df_processed['dependentes'].apply(clean_dependents)
         else:
             df_processed['dependentes'] = 0
+
+        if 'anos_empresa' in df_processed.columns:
+            df_processed['anos_empresa'] = df_processed['anos_empresa'].apply(calculate_years_worked)
+        else:
+            df_processed['anos_empresa'] = 0
 
         # Garante que as outras colunas existam (com valores padrao)
         defaults = {
