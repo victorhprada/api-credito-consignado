@@ -327,9 +327,9 @@ async def predict_batch(file: UploadFile = File(...)):
         print(f"Colunas processadas: {df_processed.columns.tolist()}")
 
         # 4. Prepara para o Modelo (A ordem das colunas importa!)
-        # IMPORTANTE: Usa a mesma ordem que usou no treino do modelo para evitar erros de ordem
-        features = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado', 'genero', 'escolaridade', 'est_civil']
-        X = df_processed[features]
+        # Nomes internos que usamos
+        features_internas = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado_cod', 'genero_cod', 'escolaridade_cod', 'est_civil_cod']
+        X = df_processed[features_internas]
 
 
         cols_model_order = ['salario', 'idade', 'estado', 'anos_empresa', 'dependentes','escolaridade', 'genero',  'est_civil']
@@ -338,14 +338,14 @@ async def predict_batch(file: UploadFile = File(...)):
         print(f"1. Colunas enviadas para o modelo: {X_tmp.columns.tolist()}")
 
         rename_map = {
-            'salario': 'Salario Base',           
+            'salario': 'Salario Base',
             'idade': 'Idade',
             'dependentes': 'Total De Dependentes',
             'anos_empresa': 'Anos_de_Empresa',
-            'estado': 'Estado',
-            'genero': 'Genero',
-            'escolaridade': 'Nivel De Escolaridade',
-            'est_civil': 'Estado Civil'
+            'estado_cod': 'Estado',           # Note que mapeamos a versão codificada
+            'genero_cod': 'Genero',
+            'escolaridade_cod': 'Nivel De Escolaridade',
+            'est_civil_cod': 'Estado Civil'
         }
 
         X = X_tmp.rename(columns=rename_map)
