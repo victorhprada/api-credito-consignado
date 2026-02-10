@@ -137,30 +137,51 @@ async def predict_batch(file: UploadFile = File(...)):
         content = await file.read()
         df = pd.read_csv(io.BytesIO(content))
         
-        # 2. Mapeamento Inteligente de Colunas (Normalização)
-        # Cria um mapa de "nomes possíveis" para "nome oficial"
+        # 2. Mapeamento Inteligente de Colunas com trava anti-duplicidade
         column_map = {}
+        targets_found = set ()
+
+
         for col in df.columns:
             col_lower = col.lower()
+            target = None
             if 'nascimento' in col_lower or 'birth' in col_lower:
-                column_map[col] = 'idade_raw' # Marcamos para calcular depois
-            elif 'salario' in col_lower or 'base' in col_lower or 'income' in col_lower:
-                column_map[col] = 'salario'
+                target = 'idade_raw'
+            elif ('salario' in col_lower or 'base' in col_lower or 'income' in col_lower) and 'liquido' not in col_lower:
+                target = 'salario'
             elif 'dependentes' in col_lower:
-                column_map[col] = 'dependentes'
+                target = 'dependentes'
             elif 'empresa' in col_lower or 'casa' in col_lower or 'admissao' in col_lower:
-                column_map[col] = 'anos_empresa' # Simplificacao: se for data admissao precisaria calc
+                target = 'anos_empresa'
             elif 'estado civil' in col_lower or 'civil' in col_lower:
-                column_map[col] = 'est_civil'
-            elif 'estado' in col_lower or 'uf' in col_lower:
-                column_map[col] = 'estado'
+                target = 'est_civil'
+            # Só aceita "estado" se NÃO tiver "civil" no nome
+            elif ('estado' in col_lower or 'uf' in col_lower) and 'civil' not in col_lower:
+                target = 'estado'
             elif 'genero' in col_lower or 'sexo' in col_lower:
-                column_map[col] = 'genero'
+                target = 'genero'
             elif 'escolaridade' in col_lower:
-                column_map[col] = 'escolaridade'
+                target = 'escolaridade'
+
+            if target and target not in targets_found:
+                column_map[col] = target
+                targets_found.add(target)
 
         # Renomeia as colunas encontradas
         df_processed = df.rename(columns=column_map).copy()
+
+        # Limpeza Extra: Garante que só temos UMA coluna de cada, sem duplicatas
+        df_final = pd.DataFrame()
+        # Copia apenas as colunas que mapeamos
+        for target in targets_found:
+            if target in df_processed.columns:
+                # Se ainda assim houver duplicata, pega só a primeira
+                if isinstance(df_processed[target], pd.DataFrame):
+                    df_final[target] = df_processed[target].iloc[:, 0]
+                else:
+                    df_final[target] = df_processed[target]
+        
+        df_processed = df_final
 
         # 3. Tratamento de Dados (Cleaning)
         # Calcula Idade se necessário
@@ -200,12 +221,13 @@ async def predict_batch(file: UploadFile = File(...)):
         predictions = modelo.predict_proba(X)[:, 1] # Pega a probabilidade da classe 1 (Positiva)
 
         # 6. Adiciona resultados ao DataFrame original
-        df['Probabilidade_Retencao'] = (predictions * 100).round(2)
-        df['Classificacao'] = np.where(predictions > 0.5, 'Perfil Tomador', 'Propensão à Quitação')
+        df_retorno = df_processed.copy()
+        df_retorno['Probabilidade_Retencao'] = (predictions * 100).round(2)
+        df_retorno['Classificacao'] = np.where(predictions > 0.5, 'Perfil Tomador', 'Propensão à Quitação')
 
         # 7. Retorna o CSV modificado
         stream = io.StringIO()
-        df.to_csv(stream, index=False)
+        df_retorno.to_csv(stream, index=False)
         response = StreamingResponse(iter([stream.getvalue()]), media_type="text/csv")
         response.headers["Content-Disposition"] = "attachment; filename=analise_processada.csv"
         return response
