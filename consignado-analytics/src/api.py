@@ -209,16 +209,32 @@ async def predict_batch(file: UploadFile = File(...)):
         print(f"Colunas processadas: {df_processed.columns.tolist()}")
 
         # 4. Prepara para o Modelo (A ordem das colunas importa!)
-        # IMPORTANTE: Use a mesma ordem que usou no treino do modelo
+        # IMPORTANTE: Usa a mesma ordem que usou no treino do modelo para evitar erros de ordem
         features = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado', 'genero', 'escolaridade', 'est_civil']
         X = df_processed[features]
 
+        rename_map = {
+            'salario': 'Salario',           # ATENÇÃO: Se no treino era "Salario Base", mude aqui!
+            'idade': 'Idade',
+            'dependentes': 'Dependentes',
+            'anos_empresa': 'Anos_de_Empresa', # O log mostrou que este tem underscores
+            'estado': 'Estado',
+            'genero': 'Genero',
+            'escolaridade': 'Escolaridade',
+            'est_civil': 'Estado Civil'
+        }
+
+        X_final = X.rename(columns=rename_map)
+        cols_model_order = ['Salario', 'Idade', 'Dependentes', 'Anos_de_Empresa', 'Estado', 'Genero', 'Escolaridade', 'Estado Civil']
+        X_final = X_final[cols_model_order]
+
+        print(f"Colunas enviadas para o modelo: {X_final.columns.tolist()}")
+
         print("Indo para predição")
-        predictions = modelo.predict_proba(X)[:, 1]
-        print("Predição concluída com sucesso!")
 
         # 5. Predição em Lote (Vetorizada)
-        predictions = modelo.predict_proba(X)[:, 1] # Pega a probabilidade da classe 1 (Positiva)
+        predictions = modelo.predict_proba(X_final)[:, 1]
+        print("Predição concluída com sucesso!")
 
         # 6. Adiciona resultados ao DataFrame original
         df_retorno = df_processed.copy()
