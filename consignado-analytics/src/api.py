@@ -291,32 +291,39 @@ async def predict_batch(file: UploadFile = File(...)):
             if col not in df_processed.columns:
                 df_processed[col] = val
 
-        # 1. Estado Civil
+        # 1. Estado Civil (Copiado da lógica do preprocessing.py)
+        # map_est_civil = {'Casado(a)': 1, 'Solteiro(a)': 0, 'Divorciado(a)': 2, 'Viúvo(a)': 3}
         mapa_civil = {
-            'Casado(a)': 0, 
-            'Divorciado(a)': 1, 
-            'Outros': 2,
-            'Separado(a)': 3, 
-            'Solteiro(a)': 4, 
-            'Viúvo(a)': 5,
-            'União Estável': 6
+            'Casado(a)': 1, 
+            'Solteiro(a)': 0, 
+            'Divorciado(a)': 2, 
+            'Viúvo(a)': 3,
+            # Fallbacks para variações que podem vir no CSV mas não estão no mapa original
+            'Separado(a)': 2,      # Trata como Divorciado
+            'União Estável': 1,    # Trata como Casado
+            'Outros': 0            # Trata como Solteiro
         }
-        # O .map converte. O fillna(4) garante que se vier algo estranho, vira 'Solteiro' (4)
-        df_processed['est_civil_cod'] = df_processed['est_civil'].map(mapa_civil).fillna(4).astype(int)
+        # O fillna(0) garante que qualquer coisa estranha vire 'Solteiro' (Seguro)
+        df_processed['est_civil_cod'] = df_processed['est_civil'].map(mapa_civil).fillna(0).astype(int)
 
-        # 2. Gênero
-        mapa_genero = {'F': 0, 'M': 1} 
-        df_processed['genero_cod'] = df_processed['genero'].map(mapa_genero).fillna(1).astype(int)
+        # 2. Gênero (map_sexo = {'M': 1, 'F': 0})
+        mapa_sexo = {'M': 1, 'F': 0} 
+        # Normalizamos para maiúsculo antes de mapear
+        df_processed['genero_cod'] = df_processed['genero'].str.upper().map(mapa_sexo).fillna(0).astype(int)
 
-        # 3. Escolaridade (Ordem Alfabética aproximada do LabelEncoder)
+        # 3. Escolaridade (map_escolaridade = {'Superior Completo': 3, ...})
         mapa_escolaridade = {
-            '1o Grau Completo': 0, '1o Grau Incompleto': 1,
-            '2o Grau Completo': 2, '2o Grau Incompleto': 3,
-            '4a Série Completa': 4, 'Alfabetizado': 5,
-            'Analfabeto': 6, 'Superior Completo': 7,
-            'Superior Incompleto': 8
+            'Superior Completo': 3,
+            '2º Grau Completo': 2, 
+            '2o Grau Completo': 2,    # Variação comum (o vs º)
+            'Ensino Médio Completo': 2, # Sinônimo
+            '2º Grau Incompleto': 1, 
+            '2o Grau Incompleto': 1,
+            'Fundamental': 0,
+            '1o Grau Completo': 0,
+            'Alfabetizado': 0
         }
-        df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(2).astype(int)
+        df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(0).astype(int)
 
         # 4. Estado (UF)
         # Lista alfabética das UFs para gerar o mapa automaticamente
@@ -342,10 +349,10 @@ async def predict_batch(file: UploadFile = File(...)):
             'idade': 'Idade',
             'dependentes': 'Total De Dependentes',
             'anos_empresa': 'Anos_de_Empresa',
-            'estado_cod': 'Estado',           # Note que mapeamos a versão codificada
+            'est_civil_cod': 'Estado Civil',
             'genero_cod': 'Genero',
             'escolaridade_cod': 'Nivel De Escolaridade',
-            'est_civil_cod': 'Estado Civil'
+            'estado_cod': 'Estado'
         }
 
         X = X_tmp.rename(columns=rename_map)
