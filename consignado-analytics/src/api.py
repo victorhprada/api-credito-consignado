@@ -217,7 +217,7 @@ async def predict_batch(file: UploadFile = File(...)):
         cols_model_order = ['salario', 'idade', 'estado', 'anos_empresa', 'dependentes','escolaridade', 'genero',  'est_civil']
         X_tmp = X[cols_model_order]
 
-        print(f"Colunas enviadas para o modelo: {X_tmp.columns.tolist()}")
+        print(f"1. Colunas enviadas para o modelo: {X_tmp.columns.tolist()}")
 
         rename_map = {
             'salario': 'Salario Base',           
@@ -231,6 +231,21 @@ async def predict_batch(file: UploadFile = File(...)):
         }
 
         X = X_tmp.rename(columns=rename_map)
+
+        colunas_ordenadas = [
+            'Salario Base', 
+            'Idade', 
+            'Total De Dependentes', 
+            'Anos_de_Empresa', 
+            'Estado Civil', 
+            'Genero', 
+            'Nivel De Escolaridade', 
+            'Estado'
+        ]
+
+        X = X[colunas_ordenadas]
+
+        print(f"2. Colunas enviadas para o modelo: {X.columns.tolist()}")
 
         print("Indo para predição")
 
