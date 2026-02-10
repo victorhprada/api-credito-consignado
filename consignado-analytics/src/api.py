@@ -344,18 +344,31 @@ async def predict_batch(file: UploadFile = File(...)):
 
         print(f"1. Colunas enviadas para o modelo: {X_tmp.columns.tolist()}")
 
+        features_internas = [
+            'salario', 
+            'idade', 
+            'dependentes', 
+            'anos_empresa', 
+            'est_civil_cod',    # Usar a versão codificada
+            'genero_cod',       # Usar a versão codificada
+            'escolaridade_cod', # Usar a versão codificada
+            'estado_cod'        # Usar a versão codificada
+        ]
+
+        X_tmp = df_processed[features_internas].copy()
+
         rename_map = {
             'salario': 'Salario Base',
             'idade': 'Idade',
             'dependentes': 'Total De Dependentes',
             'anos_empresa': 'Anos_de_Empresa',
-            'est_civil_cod': 'Estado Civil',
-            'genero_cod': 'Genero',
-            'escolaridade_cod': 'Nivel De Escolaridade',
+            'est_civil_cod': 'Estado Civil',        # O modelo lerá os números daqui
+            'genero_cod': 'Genero',                 # O modelo lerá os números daqui
+            'escolaridade_cod': 'Nivel De Escolaridade', # O modelo lerá os números daqui
             'estado_cod': 'Estado'
         }
 
-        X = X_tmp.rename(columns=rename_map)
+        X_tmp = X_tmp.rename(columns=rename_map)
 
         colunas_ordenadas = [
             'Salario Base', 
@@ -368,7 +381,14 @@ async def predict_batch(file: UploadFile = File(...)):
             'Estado'
         ]
 
-        X = X[colunas_ordenadas]
+        # Reorganiza as colunas
+        try:
+            X = X_tmp[colunas_ordenadas]
+        except KeyError as e:
+            # Debug caso ainda falte algo
+            print(f"Colunas disponíveis no X: {X_tmp.columns.tolist()}")
+            print(f"Colunas exigidas: {colunas_ordenadas}")
+            raise e
 
         print(f"2. Colunas enviadas para o modelo: {X.columns.tolist()}")
 
