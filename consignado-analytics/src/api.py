@@ -213,27 +213,27 @@ async def predict_batch(file: UploadFile = File(...)):
         features = ['salario', 'idade', 'dependentes', 'anos_empresa', 'estado', 'genero', 'escolaridade', 'est_civil']
         X = df_processed[features]
 
-        rename_map = {
-            'salario': 'Salario',           # ATENÇÃO: Se no treino era "Salario Base", mude aqui!
-            'idade': 'Idade',
-            'dependentes': 'Dependentes',
-            'anos_empresa': 'Anos_de_Empresa', # O log mostrou que este tem underscores
-            'estado': 'Estado',
-            'genero': 'Genero',
-            'escolaridade': 'Escolaridade',
-            'est_civil': 'Estado Civil'
-        }
+        # rename_map = {
+        #     'salario': 'Salario',           # ATENÇÃO: Se no treino era "Salario Base", mude aqui!
+        #     'idade': 'Idade',
+        #     'dependentes': 'Dependentes',
+        #     'anos_empresa': 'Anos_de_Empresa', # O log mostrou que este tem underscores
+        #     'estado': 'Estado',
+        #     'genero': 'Genero',
+        #     'escolaridade': 'Escolaridade',
+        #     'est_civil': 'Estado Civil'
+        # }
 
-        X_final = X.rename(columns=rename_map)
+        # X_final = X.rename(columns=rename_map)
         cols_model_order = ['salario', 'idade', 'estado', 'anos_empresa', 'dependentes','escolaridade', 'genero',  'est_civil']
-        X_final = X_final[cols_model_order]
+        X_final = X[cols_model_order]
 
-        print(f"Colunas enviadas para o modelo: {X_final.columns.tolist()}")
+        print(f"Colunas enviadas para o modelo: {X.columns.tolist()}")
 
         print("Indo para predição")
 
         # 5. Predição em Lote (Vetorizada)
-        predictions = modelo.predict_proba(X_final)[:, 1]
+        predictions = modelo.predict_proba(X)[:, 1]
         print("Predição concluída com sucesso!")
 
         # 6. Adiciona resultados ao DataFrame original
