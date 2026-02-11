@@ -203,221 +203,143 @@ def calculate_years_worked(val):
 
 @app.post("/predict_batch")
 async def predict_batch(file: UploadFile = File(...)):
-    # 1. Validação Básica
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Arquivo deve ser um CSV")
     
     try:
-        # Leitura do arquivo
         content = await file.read()
         df = pd.read_csv(io.BytesIO(content))
         
-        # --- ETAPA 1: MAPEAMENTO DE COLUNAS (NORMALIZAÇÃO) ---
+        # --- 1. MAPEAMENTO DE COLUNAS ---
         column_map = {}
         targets_found = set()
-
+        
+        # Mapeamento flexível (aceita vários nomes)
         for col in df.columns:
-            col_lower = col.lower()
+            c = col.lower()
             target = None
-
-            # Lógica de Identificação
-            if 'nascimento' in col_lower or 'birth' in col_lower:
-                target = 'idade_raw'
-            elif ('salario' in col_lower or 'base' in col_lower or 'income' in col_lower) and 'liquido' not in col_lower:
-                target = 'salario'
-            elif 'dependentes' in col_lower:
-                target = 'dependentes'
-            elif 'empresa' in col_lower or 'casa' in col_lower or 'admissao' in col_lower:
-                target = 'anos_empresa'
-            elif 'estado civil' in col_lower or 'civil' in col_lower:
-                target = 'est_civil'
-            elif ('estado' in col_lower or 'uf' in col_lower) and 'civil' not in col_lower:
-                target = 'estado'
-            elif 'genero' in col_lower or 'sexo' in col_lower:
-                target = 'genero'
-            elif 'escolaridade' in col_lower:
-                target = 'escolaridade'
+            if 'nascimento' in c or 'birth' in c: target = 'idade_raw'
+            elif ('salario' in c or 'base' in c or 'income' in c) and 'liquido' not in c: target = 'salario'
+            elif 'dependentes' in c: target = 'dependentes'
+            elif 'empresa' in c or 'admissao' in c: target = 'anos_empresa'
+            elif 'estado civil' in c or 'civil' in c: target = 'est_civil'
+            elif ('estado' in c or 'uf' in c) and 'civil' not in c: target = 'estado'
+            elif 'genero' in c or 'sexo' in c: target = 'genero'
+            elif 'escolaridade' in c: target = 'escolaridade'
 
             if target and target not in targets_found:
                 column_map[col] = target
                 targets_found.add(target)
 
-        # Aplica renomeação e remove duplicatas
         df_processed = df.rename(columns=column_map).copy()
         
-        # Garante apenas uma coluna de cada tipo (se houver duplicidade no CSV)
+        # Garante colunas únicas
         df_final = pd.DataFrame()
-        for target in targets_found:
-            if target in df_processed.columns:
-                if isinstance(df_processed[target], pd.DataFrame):
-                    df_final[target] = df_processed[target].iloc[:, 0]
+        for t in targets_found:
+            if t in df_processed.columns:
+                if isinstance(df_processed[t], pd.DataFrame):
+                    df_final[t] = df_processed[t].iloc[:, 0]
                 else:
-                    df_final[target] = df_processed[target]
+                    df_final[t] = df_processed[t]
         df_processed = df_final
 
-        # --- ETAPA 2: LIMPEZA E CÁLCULOS (CLEANING) ---
-        
-        # Preenche colunas obrigatórias com padrão se não existirem
+        # --- 2. VALORES PADRÃO & LIMPEZA ---
         defaults = {
-            'dependentes': 0, 'anos_empresa': 0, 
-            'estado': 'SP', 'genero': 'M', 
-            'escolaridade': '2o Grau Completo', 'est_civil': 'Solteiro(a)',
-            'salario': 0, 'idade_raw': None
+            'dependentes': 0, 'anos_empresa': 0, 'estado': 'SP', 
+            'genero': 'M', 'escolaridade': '2o Grau Completo', 
+            'est_civil': 'Solteiro(a)', 'salario': 0, 'idade_raw': None
         }
         for col, val in defaults.items():
-            if col not in df_processed.columns:
-                df_processed[col] = val
+            if col not in df_processed.columns: df_processed[col] = val
 
-        # A. Cálculos Numéricos
-        # Idade
+        # Cálculos
         if 'idade_raw' in df_processed.columns:
             df_processed['idade'] = df_processed['idade_raw'].apply(calculate_age)
         elif 'idade' not in df_processed.columns:
-            df_processed['idade'] = 0 
+            df_processed['idade'] = 0
 
-        # Salário
         df_processed['salario'] = df_processed['salario'].apply(clean_currency)
-        
-        # Dependentes
         df_processed['dependentes'] = df_processed['dependentes'].apply(clean_dependents)
-            
-        # Anos de Empresa
         df_processed['anos_empresa'] = df_processed['anos_empresa'].apply(calculate_years_worked)
 
-        # --- ETAPA 3: ENCODING (TEXTO -> NÚMERO) ---
-        # ATENÇÃO: Convertemos aqui para os números exatos que o modelo espera (0, 1, 2...)
+        # --- 3. ENCODING (ORDEM ALFABÉTICA - CRÍTICO!) ---
+        # O LabelEncoder usa ordem alfabética. Se trocarmos isso, o modelo erra.
         
-        # Estado Civil
+        # Estado Civil (Ordem Alfabética Padrão)
+        # 0: Casado, 1: Divorciado, 2: Outros, 3: Separado, 4: Solteiro, 5: União, 6: Viúvo
         mapa_civil = {
-            'Casado(a)': 1, 'União Estável': 1,
-            'Solteiro(a)': 0, 'Outros': 0,
-            'Divorciado(a)': 2, 'Separado(a)': 2,
-            'Viúvo(a)': 3
+            'Casado(a)': 0, 'União Estável': 5,
+            'Solteiro(a)': 4, 'Outros': 2,
+            'Divorciado(a)': 1, 'Separado(a)': 3,
+            'Viúvo(a)': 6
         }
-        df_processed['est_civil_cod'] = df_processed['est_civil'].map(mapa_civil).fillna(0).astype(int)
+        # Normaliza e mapeia (Fallback para 4=Solteiro se não achar)
+        df_processed['est_civil_cod'] = df_processed['est_civil'].map(mapa_civil).fillna(4).astype(int)
 
-        # Gênero
-        mapa_sexo = {'M': 1, 'F': 0} 
-        df_processed['genero_cod'] = df_processed['genero'].str.upper().map(mapa_sexo).fillna(0).astype(int)
+        # Gênero (F vem antes de M)
+        mapa_sexo = {'F': 0, 'M': 1} 
+        df_processed['genero_cod'] = df_processed['genero'].str.upper().map(mapa_sexo).fillna(1).astype(int)
 
-        # Escolaridade
+        # Escolaridade (Alfabética)
+        # Cuidado: "1º" vem antes de "2º", "Superior" vem por último.
+        # Ajuste conforme os dados usados no treino. Assumindo lista padrão:
         mapa_escolaridade = {
-            'Superior Completo': 3,
+            '1º Grau Completo': 0, '1o Grau Completo': 0,
+            '1º Grau Incompleto': 1, '1o Grau Incompleto': 1,
             '2º Grau Completo': 2, '2o Grau Completo': 2, 'Ensino Médio Completo': 2,
-            '2º Grau Incompleto': 1, '2o Grau Incompleto': 1,
-            'Fundamental': 0, '1o Grau Completo': 0, 'Alfabetizado': 0
+            '2º Grau Incompleto': 3, '2o Grau Incompleto': 3, 'Ensino Médio Incompleto': 3,
+            'Alfabetizado': 4,
+            'Analfabeto': 5,
+            'Superior Completo': 6,
+            'Superior Incompleto': 7
         }
-        df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(0).astype(int)
+        df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(2).astype(int)
 
-        # Estado (UF) -> Mantendo mapeamento numérico (0-26)
-        # ufs = sorted(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])
-        # mapa_uf = {uf: i for i, uf in enumerate(ufs)}
-        # df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(0).astype(int)
-        df_processed['estado_cod'] = 0
+        # Estado UF (Alfabética 0-26)
+        # O LabelEncoder numerou AC=0, AL=1... SP=25.
+        ufs = sorted(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])
+        mapa_uf = {uf: i for i, uf in enumerate(ufs)}
+        df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(25).astype(int)
 
-        
-
-        print(f"Colunas disponíveis no DF Processado: {df_processed.columns.tolist()}")
-
-        # --- ETAPA 4: PREPARAÇÃO FINAL PARA O MODELO ---
-        
-        # 1. Selecionar APENAS as colunas numéricas (CODIFICADAS)
-        # IMPORTANTE: Aqui usamos os nomes '_cod' que acabamos de criar
+        # --- 4. PREPARAÇÃO FINAL ---
         features_para_modelo = [
-            'salario',          # Numérico
-            'idade',            # Numérico
-            'dependentes',      # Numérico
-            'anos_empresa',     # Numérico
-            'est_civil_cod',    # Codificado (0, 1, 2...)
-            'genero_cod',       # Codificado (0, 1)
-            'escolaridade_cod', # Codificado (0, 1, 2, 3)
-            'estado_cod'        # Codificado (0-26)
+            'salario', 'idade', 'dependentes', 'anos_empresa',
+            'est_civil_cod', 'genero_cod', 'escolaridade_cod', 'estado_cod'
         ]
-        
-        # Cria o DataFrame X limpo
         X = df_processed[features_para_modelo].copy()
 
-        # 2. Renomear para os nomes EXATOS que o .pkl exige
-        # De: "Nosso Nome Interno" -> Para: "Nome do Treino"
         rename_map = {
-            'salario': 'Salario Base',
-            'idade': 'Idade',
-            'dependentes': 'Total De Dependentes',
-            'anos_empresa': 'Anos_de_Empresa',
-            'est_civil_cod': 'Estado Civil',        # Note: Liga o CODIFICADO ao nome final
-            'genero_cod': 'Genero',                 # Note: Liga o CODIFICADO ao nome final
-            'escolaridade_cod': 'Nivel De Escolaridade', # Note: Liga o CODIFICADO ao nome final
-            'estado_cod': 'Estado'                  # Note: Liga o CODIFICADO ao nome final
+            'salario': 'Salario Base', 'idade': 'Idade', 
+            'dependentes': 'Total De Dependentes', 'anos_empresa': 'Anos_de_Empresa',
+            'est_civil_cod': 'Estado Civil', 'genero_cod': 'Genero', 
+            'escolaridade_cod': 'Nivel De Escolaridade', 'estado_cod': 'Estado'
         }
-        
         X_final = X.rename(columns=rename_map)
-
-        # 3. Ordenar colunas (Ordem obrigatória do Scikit-Learn)
-        colunas_ordenadas = [
-            'Salario Base', 
-            'Idade', 
-            'Total De Dependentes', 
-            'Anos_de_Empresa', 
-            'Estado Civil', 
-            'Genero', 
-            'Nivel De Escolaridade', 
-            'Estado'
-        ]
         
-        # Reorganiza
+        # Ordem Obrigatória
+        colunas_ordenadas = [
+            'Salario Base', 'Idade', 'Total De Dependentes', 'Anos_de_Empresa', 
+            'Estado Civil', 'Genero', 'Nivel De Escolaridade', 'Estado'
+        ]
         X_final = X_final[colunas_ordenadas]
 
-        print(f"Colunas finais enviadas para predição: {X_final.columns.tolist()}")
-        print(f"Exemplo de dados: {X_final.head(1).values}")
-
-        # --- ÁREA DE DEBUG (RAIO-X) ---
-        print("\n" + "="*30)
-        print("RAIO-X DOS DADOS (O que o modelo está vendo):")
-        
-        # 1. Ver se tem valores zerados demais
-        print("\nEstatísticas (Veja se a média do Salario/Idade faz sentido):")
-        print(X_final.describe().to_string()) 
-
-        # 2. Ver a primeira linha real
-        print("\nPrimeira linha exata enviada:")
-        print(X_final.iloc[0].to_dict())
-        
-        # 3. Ver se existem NaNs (Valores vazios que viraram 0 ou erro)
-        print("\nTem valores nulos/NaN?")
-        print(X_final.isna().sum().to_string())
-        print("="*30 + "\n")
-        # ------------------------------
-
-        # --- ETAPA 5: PREDIÇÃO ---
+        # --- 5. PREDIÇÃO & RETORNO ---
         print("Indo para predição...")
-        predictions = modelo.predict_proba(X_final)[:, 1]
-        probs = predictions
-        # --- RAIO-X DAS PROBABILIDADES (NOVO) ---
-        print("\n" + "="*30)
-        print("RESULTADO DA PREDIÇÃO:")
-        print(f"Probabilidade Mínima: {(probs.min() * 100):.2f}%")
-        print(f"Probabilidade Máxima: {(probs.max() * 100):.2f}%") # <--- O valor mais importante
-        print(f"Probabilidade Média:  {(probs.mean() * 100):.2f}%")
+        probs = modelo.predict_proba(X_final)[:, 1]
         
-        # Quantos passariam se a régua fosse 30%?
-        aprovados_30 = (probs > 0.30).sum()
-        print(f"Clientes acima de 30%: {aprovados_30} de {len(probs)}")
-        print("="*30 + "\n")
-        # ----------------------------------------
-        predictions = probs
+        # RAIO-X LOG
+        print(f"Probabilidade Média: {(probs.mean() * 100):.2f}%")
+        print(f"Tomadores (>50%): {(probs > 0.5).sum()} de {len(probs)}")
 
-        print("Predição concluída com sucesso!")
-
-        # --- ETAPA 6: RETORNO ---
-        # Monta o CSV de resposta usando o DF original processado (para o usuário ler os textos, não os códigos)
         df_retorno = df_processed.copy()
         
-        # Limpa as colunas auxiliares para não poluir o CSV do usuário
+        # Limpeza visual
         cols_sujeira = ['est_civil_cod', 'genero_cod', 'escolaridade_cod', 'estado_cod', 'idade_raw']
         df_retorno = df_retorno.drop(columns=[c for c in cols_sujeira if c in df_retorno.columns], errors='ignore')
 
-        df_retorno['Probabilidade'] = (predictions * 100).round(2)
-        df_retorno['Classificacao'] = np.where(predictions > 0.3, 'Perfil Tomador', 'Propensão à Quitação')
+        # [CORREÇÃO] Nome da coluna deve ser 'Probabilidade' para o Front reconhecer
+        df_retorno['Probabilidade'] = (probs * 100).round(2)
+        df_retorno['Classificacao'] = np.where(probs > 0.5, 'Perfil Tomador', 'Propensão à Quitação')
 
         stream = io.StringIO()
         df_retorno.to_csv(stream, index=False)
@@ -427,9 +349,9 @@ async def predict_batch(file: UploadFile = File(...)):
         return response
 
     except Exception as e:
-        erro_completo = traceback.format_exc()
-        print(f"ERRO FATAL: {erro_completo}")
-        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
