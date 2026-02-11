@@ -367,6 +367,24 @@ async def predict_batch(file: UploadFile = File(...)):
         print(f"Colunas finais enviadas para predição: {X_final.columns.tolist()}")
         print(f"Exemplo de dados: {X_final.head(1).values}")
 
+        # --- ÁREA DE DEBUG (RAIO-X) ---
+        print("\n" + "="*30)
+        print("RAIO-X DOS DADOS (O que o modelo está vendo):")
+        
+        # 1. Ver se tem valores zerados demais
+        print("\nEstatísticas (Veja se a média do Salario/Idade faz sentido):")
+        print(X_final.describe().to_string()) 
+
+        # 2. Ver a primeira linha real
+        print("\nPrimeira linha exata enviada:")
+        print(X_final.iloc[0].to_dict())
+        
+        # 3. Ver se existem NaNs (Valores vazios que viraram 0 ou erro)
+        print("\nTem valores nulos/NaN?")
+        print(X_final.isna().sum().to_string())
+        print("="*30 + "\n")
+        # ------------------------------
+
         # --- ETAPA 5: PREDIÇÃO ---
         print("Indo para predição...")
         predictions = modelo.predict_proba(X_final)[:, 1]
