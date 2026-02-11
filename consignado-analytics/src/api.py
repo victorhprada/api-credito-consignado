@@ -310,9 +310,12 @@ async def predict_batch(file: UploadFile = File(...)):
         df_processed['escolaridade_cod'] = df_processed['escolaridade'].map(mapa_escolaridade).fillna(0).astype(int)
 
         # Estado (UF) -> Mantendo mapeamento numérico (0-26)
-        ufs = sorted(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])
-        mapa_uf = {uf: i for i, uf in enumerate(ufs)}
-        df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(0).astype(int)
+        # ufs = sorted(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'])
+        # mapa_uf = {uf: i for i, uf in enumerate(ufs)}
+        # df_processed['estado_cod'] = df_processed['estado'].str.upper().map(mapa_uf).fillna(0).astype(int)
+        df_processed['estado_cod'] = 0
+
+        
 
         print(f"Colunas disponíveis no DF Processado: {df_processed.columns.tolist()}")
 
@@ -399,7 +402,7 @@ async def predict_batch(file: UploadFile = File(...)):
         df_retorno = df_retorno.drop(columns=[c for c in cols_sujeira if c in df_retorno.columns], errors='ignore')
 
         df_retorno['Probabilidade_Retencao'] = (predictions * 100).round(2)
-        df_retorno['Classificacao'] = np.where(predictions > 0.5, 'Perfil Tomador', 'Propensão à Quitação')
+        df_retorno['Classificacao'] = np.where(predictions > 0.3, 'Perfil Tomador', 'Propensão à Quitação')
 
         stream = io.StringIO()
         df_retorno.to_csv(stream, index=False)
