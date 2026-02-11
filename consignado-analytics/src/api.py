@@ -391,6 +391,21 @@ async def predict_batch(file: UploadFile = File(...)):
         # --- ETAPA 5: PREDIÇÃO ---
         print("Indo para predição...")
         predictions = modelo.predict_proba(X_final)[:, 1]
+        probs = predictions
+        # --- RAIO-X DAS PROBABILIDADES (NOVO) ---
+        print("\n" + "="*30)
+        print("RESULTADO DA PREDIÇÃO:")
+        print(f"Probabilidade Mínima: {(probs.min() * 100):.2f}%")
+        print(f"Probabilidade Máxima: {(probs.max() * 100):.2f}%") # <--- O valor mais importante
+        print(f"Probabilidade Média:  {(probs.mean() * 100):.2f}%")
+        
+        # Quantos passariam se a régua fosse 30%?
+        aprovados_30 = (probs > 0.30).sum()
+        print(f"Clientes acima de 30%: {aprovados_30} de {len(probs)}")
+        print("="*30 + "\n")
+        # ----------------------------------------
+        predictions = probs
+
         print("Predição concluída com sucesso!")
 
         # --- ETAPA 6: RETORNO ---
