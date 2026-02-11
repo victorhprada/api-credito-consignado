@@ -416,7 +416,7 @@ async def predict_batch(file: UploadFile = File(...)):
         cols_sujeira = ['est_civil_cod', 'genero_cod', 'escolaridade_cod', 'estado_cod', 'idade_raw']
         df_retorno = df_retorno.drop(columns=[c for c in cols_sujeira if c in df_retorno.columns], errors='ignore')
 
-        df_retorno['Probabilidade_Retencao'] = (predictions * 100).round(2)
+        df_retorno['Probabilidade'] = (predictions * 100).round(2)
         df_retorno['Classificacao'] = np.where(predictions > 0.3, 'Perfil Tomador', 'Propensão à Quitação')
 
         stream = io.StringIO()
