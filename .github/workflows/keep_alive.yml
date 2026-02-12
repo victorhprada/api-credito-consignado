@@ -1,0 +1,16 @@
+name: Keep Alive Render
+
+on:
+  # Agenda para rodar a cada 14 minutos
+  schedule:
+    - cron: '*/14 * * * *'
+  # Permite rodar manualmente clicando em um botão (ótimo para testar)
+  workflow_dispatch:
+
+jobs:
+  ping_api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Acordar a API
+        # O flag -I faz uma requisição HEAD (mais leve que GET) só para ver se está on
+        run: curl -I https://api-credito-consignado.onrender.com/
