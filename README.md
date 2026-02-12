@@ -1,13 +1,53 @@
-# API de Crédito Consignado
+# 📊 Credit Retention Intelligence (CRI)
 
-Sistema de análise e predição de reincidência de crédito consignado usando Machine Learning.
+![Project Status](https://img.shields.io/badge/status-concluído-success)
+![Python Version](https://img.shields.io/badge/python-3.10+-blue)
+![Stack](https://img.shields.io/badge/stack-FullStack_Data_Science-orange)
 
-## 📋 Descrição
+> **Uma plataforma inteligente para predição de Churn (saída de clientes) em Crédito Consignado, capaz de processar grandes volumes de dados para apoiar decisões estratégicas.**
 
-Este projeto implementa uma solução completa para análise de crédito consignado, incluindo:
-- Análise exploratória de dados
-- Modelo de Machine Learning para predição de reincidência
-- API REST para integração com sistemas externos
+---
+
+## 🎯 O Problema de Negócio (Para Gestores e HR)
+
+Empresas de crédito lidam com milhares de contratos ativos. Identificar quais clientes estão propensos a sair (quitar o contrato ou fazer portabilidade) é crucial para a retenção.
+Anteriormente, essa análise era feita de forma **manual em planilhas Excel**, o que era:
+* **Lento:** Demorava horas para processar 1.000 clientes.
+* **Limitado:** Impossível analisar a base inteira (40.000+ clientes) de uma vez.
+* **Subjetivo:** Baseado na intuição, não em dados estatísticos.
+
+### 🚀 A Solução
+Desenvolvi uma aplicação Web completa que utiliza **Inteligência Artificial** para ler o histórico do cliente e calcular a probabilidade exata dele manter o contrato.
+
+**Resultados Alcançados:**
+* ✅ **Escalabilidade:** Processamento de **45.000+ linhas** em poucos minutos.
+* ✅ **Precisão:** Modelo de Machine Learning treinado com dados históricos reais.
+* ✅ **Eficiência:** Redução drástica no tempo operacional da equipe de análise.
+
+---
+
+## 🛠️ Deep Dive Técnico (Para Tech Leads e Devs)
+
+Este projeto não é apenas um modelo de ML, é uma aplicação **Full Stack de Ciência de Dados** projetada para contornar limitações reais de infraestrutura.
+
+### 🏗️ Arquitetura e Stack
+* **Frontend:** React (Vite) + TailwindCSS (Interface moderna e responsiva).
+* **Backend:** Python com **FastAPI** (Alta performance e assincronismo).
+* **Machine Learning:** Scikit-Learn (**Random Forest Classifier**), Pandas e Numpy.
+* **Deploy:** Render (Cloud).
+
+### 🔥 O Grande Desafio Técnico: "Big Data" no Free Tier
+Um dos maiores desafios foi processar arquivos CSV gigantes (45k+ linhas) em um ambiente de nuvem com recursos limitados (512MB RAM e Timeouts curtos).
+
+**A Solução de Engenharia:**
+Implementei uma estratégia de **Client-Side Chunking (Fatiamento no Frontend)**:
+1.  O Frontend lê o arquivo CSV localmente.
+2.  Quebra os dados em "lotes" (chunks) de 1.000 linhas.
+3.  Envia requisições sequenciais para a API Python.
+4.  O Backend processa, prevê e retorna o lote.
+5.  O Frontend remonta o arquivo final para o usuário.
+
+> *Isso permitiu processar volumes ilimitados de dados sem estourar a memória do servidor e sem sofrer timeouts de conexão (Erro 504), garantindo uma experiência fluida.*
 
 ## 🗂️ Estrutura do Projeto
 
@@ -36,86 +76,68 @@ consignado-analytics/
 └── README.md
 ```
 
-## 🚀 Instalação
+---
 
-1. Clone o repositório:
-```bash
-git clone https://github.com/victorhprada/api-credito-consignado.git
-cd api-credito-consignado
-```
+## 🧠 O Modelo de Machine Learning
 
-2. Instale as dependências:
+O coração do sistema é um algoritmo **Random Forest** que analisa padrões comportamentais.
+
+**Pipeline de Dados (ETL):**
+1.  **Limpeza:** Tratamento automático de moedas (`R$ 1.200,00` -> `1200.0`), datas e valores nulos.
+2.  **Feature Engineering:** Cálculo automático de "Idade" e "Tempo de Casa" baseados nas datas.
+3.  **Encoding:** Transformação inteligente de variáveis categóricas (Estado Civil, Escolaridade) respeitando a semântica dos dados.
+
+---
+
+## 📸 Screenshots
+
+*(Espaço reservado para colocar os prints que você me mandou: A tela de upload, a barra de progresso funcionando e a tela de resultado final)*
+
+---
+
+## 🚀 Como Rodar o Projeto Localmente
+
+### Pré-requisitos
+* Python 3.10+
+* Node.js 18+
+
+### Passo 1: Backend (API)
 ```bash
+# Clone o repositório
+git clone [https://github.com/seu-usuario/consignado-analytics.git](https://github.com/seu-usuario/consignado-analytics.git)
+cd consignado-analytics/src
+
+# Crie e ative o ambiente virtual
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Instale as dependências
 pip install -r requirements.txt
+
+# Rode a API
+uvicorn api:app --reload
 ```
 
-3. Configure as variáveis de ambiente:
+### Passo 2: Frontend (Interface)
 ```bash
-cp .env.example .env
-# Edite o arquivo .env e adicione a URL do modelo no Google Drive
+# Em outro terminal, vá para a pasta do front
+cd frontend
+
+# Instale as dependências
+npm install
+
+# Rode o servidor de desenvolvimento
+npm run dev
 ```
-
-## 🔧 Dependências
-
-- pandas
-- numpy
-- scikit-learn
-- fastapi
-- uvicorn
-- joblib
-- pydantic
-- gdown (para baixar o modelo)
-- python-dotenv (para variáveis de ambiente)
-
-## 📦 Configuração do Modelo
-
-O modelo é grande demais para o GitHub (107 MB), então ele é baixado automaticamente do Google Drive.
-
-### Como fazer upload do modelo no Google Drive:
-
-1. Acesse https://drive.google.com
-2. Faça upload do arquivo `modelo_reincidencia_credito.pkl`
-3. Clique com botão direito no arquivo → "Compartilhar"
-4. Em "Acesso geral", selecione "Qualquer pessoa com o link"
-5. Copie o link compartilhado (formato: `https://drive.google.com/file/d/FILE_ID/view?usp=sharing`)
-6. Use esse link na variável de ambiente `MODELO_URL`
-
-### Configurar no Render:
-
-1. Acesse seu projeto no Render
-2. Vá em "Environment" → "Environment Variables"
-3. Adicione a variável:
-   - **Key**: `MODELO_URL`
-   - **Value**: Link do Google Drive (formato completo)
-
-## 📊 Uso
-
-### Executar a API localmente
-
-```bash
-PYTHONPATH=consignado-analytics uvicorn consignado-analytics.src.api:app --reload
-```
-
-A API estará disponível em `http://localhost:8000`
-
-### Documentação da API
-
-Acesse `http://localhost:8000/docs` para ver a documentação interativa (Swagger UI).
-
-### Deploy no Render
-
-**Comando de Start:**
-```bash
-PYTHONPATH=consignado-analytics uvicorn consignado-analytics.src.api:app --host 0.0.0.0 --port $PORT
-```
-
-**Variáveis de Ambiente necessárias:**
-- `MODELO_URL`: URL do modelo no Google Drive
 
 ## 📝 Licença
 
-Este projeto é de uso pessoal/educacional.
+Este projeto é de uso pessoal.
 
 ## 👤 Autor
 
-Victor Prada
+**Victor Prada**
+
+*Analista de Dados e Cientista de Dados*
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/victorh-prada/)
