@@ -18,6 +18,10 @@ import traceback
 
 app = FastAPI()
 
+@app.get("/")
+def health_check():
+    return {"status": "ok", "message": "API está acordada e pronta para o combate!"}
+
 # Configurar CORS para permitir requisições do frontend
 app.add_middleware(
     CORSMiddleware,
