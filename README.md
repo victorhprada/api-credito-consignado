@@ -3,6 +3,7 @@
 ![Project Status](https://img.shields.io/badge/status-concluído-success)
 ![Python Version](https://img.shields.io/badge/python-3.10+-blue)
 ![Stack](https://img.shields.io/badge/stack-FullStack_Data_Science-orange)
+[![Keep Alive Render](https://github.com/victorhprada/api-credito-consignado/actions/workflows/keep_alive.yml/badge.svg?branch=main)](https://github.com/victorhprada/api-credito-consignado/actions/workflows/keep_alive.yml)
 
 > **Uma plataforma inteligente para predição de Churn (saída de clientes) em Crédito Consignado, capaz de processar grandes volumes de dados para apoiar decisões estratégicas.**
 
