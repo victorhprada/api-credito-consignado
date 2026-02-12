@@ -49,6 +49,18 @@ Implementei uma estratégia de **Client-Side Chunking (Fatiamento no Frontend)**
 
 > *Isso permitiu processar volumes ilimitados de dados sem estourar a memória do servidor e sem sofrer timeouts de conexão (Erro 504), garantindo uma experiência fluida.*
 
+### ⚡ DevOps: Mantendo a API "Acordada"
+Outro desafio do plano gratuito do Render é o **"Cold Start"**: o servidor desliga após 15 minutos de inatividade, causando lentidão na primeira requisição.
+
+**A Solução de Automação:**
+Implementei um workflow de CI/CD no **GitHub Actions** que atua como um *Heartbeat*:
+1.  Um **Cron Job** é executado automaticamente a cada 14 minutos.
+2.  Ele envia um "ping" leve para a rota de saúde (`/`) da API.
+3.  Isso impede que o container hiberne, garantindo alta disponibilidade e resposta rápida a qualquer momento.
+
+> *Arquivo de configuração: `.github/workflows/keep_alive.yml`*
+
+
 ## 🗂️ Estrutura do Projeto
 
 ```
