@@ -9,7 +9,7 @@
 
 ---
 
-## 🎯 O Problema de Negócio (Para Gestores e HR)
+## 🎯 O Problema de Negócio
 
 Empresas de crédito lidam com milhares de contratos ativos. Identificar quais clientes estão propensos a sair (quitar o contrato ou fazer portabilidade) é crucial para a retenção.
 Anteriormente, essa análise era feita de forma **manual em planilhas Excel**, o que era:
